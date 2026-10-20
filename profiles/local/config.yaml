@@ -1,0 +1,10 @@
+# Usage: snakemake --profile profiles/local --snakefile workflow/Snakefile <target>
+# Runs everything with local cores - fine for the laptop-side rules
+# (parsing, taxonomy, disorder metrics, AFDB lookups, plotting). Don't
+# point this at the cluster-only rules (jackhmmer/mafft/iqtree/esmfold/
+# colabfold) unless you've actually got those tools installed locally.
+
+executor: local
+cores: 4
+printshellcmds: true
+rerun-incomplete: true

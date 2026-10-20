@@ -1,0 +1,51 @@
+# ---- paths -------------------------------------------------------------
+# On the cluster, point `database` at an institute-wide copy if one exists
+# (check with your HPC team before downloading your own multi-GB copy).
+query_fasta: "data/raw/human_BRCA2.fasta"        # UniProt P51587
+database: "data/external/uniref90.fasta"          # or uniprot_sprot.fasta
+brc_repeat_hmm: "data/external/BRC_repeat.hmm"    # Pfam PF00634, fetch once
+
+# ---- jackhmmer -----------------------------------------------------------
+jackhmmer:
+  iterations: 5
+  incE: 1e-3            # inclusion threshold, drives profile growth
+  reportE: 1e-2
+  cpus: 16
+
+# ---- hit filtering (laptop-side) -----------------------------------------
+filtering:
+  min_domain_coverage: 0.4   # fraction of query's annotated domains covered
+  max_hits: 1000              # hard cap before MSA, sort by coverage not E-value
+  dedup_by: "uniprot_id"
+
+# ---- MSA / tree ------------------------------------------------------------
+mafft:
+  mode: "auto"          # "auto" below ~200 seqs, "linsi" above triggers warning
+  cpus: 16
+
+iqtree:
+  model_selection: "MFP"
+  bootstrap: 1000
+  cpus: 16
+
+# ---- structure sources -----------------------------------------------------
+structure:
+  alphafold_db_api: "https://alphafold.ebi.ac.uk/api/prediction/"
+  esmfold_batch_size: 8
+  colabfold_shortlist_size: 20   # only the top N candidates get full AF2
+
+# ---- SLURM resource defaults (overridden per-job in slurm_jobs/*.sbatch) ---
+# Crick cluster partitions (confirm with `sinfo` in case this changes):
+#   ncpu   - general CPU, 128 threads/2TB RAM per node, 7-day max, open access
+#   nint   - interactive only, cpu<=8, 12h max - use for prototyping, not batch
+#   nhmem  - high-RAM (4TB/node), min 2TB request - only if something needs it
+#   ga100  - 4xA100-80GB/node, open access, 7-day max - default GPU partition
+#   gh100  - 4xH100-80GB/node, needs HPC approval first (contact its-helpdesk)
+#   gl40   - 4xL40/node, needs HPC approval first
+#   vis    - visualisation, capped at 1 GPU/user, 16h max - not for batch GPU work
+slurm:
+  partition: "ncpu"
+  gpu_partition: "ga100"   # open-access by default; switch to gh100/gl40 only
+                           # after requesting access (see table in README)
+  account: ""              # fill in your lab/STP group account if required
+  mem_per_cpu_mb: 4000      # ncpu cap is 28000mb/cpu - 4000 is plenty for these jobs

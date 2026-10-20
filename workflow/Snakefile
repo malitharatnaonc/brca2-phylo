@@ -1,0 +1,13 @@
+configfile: "config/config.yaml"
+
+include: "rules/01_homolog_search.smk"
+include: "rules/02_parse_hits.smk"
+include: "rules/03_msa_tree.smk"
+include: "rules/04_sequence_metrics.smk"
+include: "rules/05_structure.smk"
+
+rule all:
+    input:
+        "results/metrics/homolog_metrics.tsv",
+        "results/tree/homologs.treefile",
+        "results/structures/structure_metrics.tsv"

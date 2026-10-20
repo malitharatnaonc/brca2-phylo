@@ -1,0 +1,52 @@
+# Local tooling and credentials
+.agents/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*credentials*
+*secret*
+
+# Python environments and caches
+.venv/
+venv/
+venvs/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Generated/fetched data and results - reproducible from the pipeline, not
+# hand-authored, so they don't belong in git. Keep raw query inputs tracked
+# (data/raw/) since those define the experiment.
+data/processed/
+data/external/
+results/hits/
+results/msa/
+results/tree/
+results/metrics/
+results/structures/
+logs/
+
+# Large reference databases if ever staged locally/on scratch
+*.fasta.gz
+uniref*.fasta
+uniprot_*.fasta
+
+# Scheduler/runtime artifacts (in case any land outside logs/)
+*.out
+*.err
+*.bak
+*.tmp
+*.swp

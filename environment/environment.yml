@@ -1,0 +1,17 @@
+name: brca2-phylo-laptop
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.11
+  - snakemake-minimal>=8
+  - pandas
+  - requests
+  - biopython
+  - matplotlib
+  - seaborn
+  - ete3
+  - jupyterlab
+  - pip
+  - pip:
+      - metapredict

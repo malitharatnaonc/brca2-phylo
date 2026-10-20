@@ -1,0 +1,38 @@
+# Snakemake >=8 SLURM executor profile.
+# Usage: snakemake --profile profiles/slurm --snakefile workflow/Snakefile <target>
+#
+# This lets the SAME Snakefile run locally on the laptop (no --profile flag,
+# or a trivial "local" profile) and on the cluster (this profile), so you
+# never maintain two copies of the pipeline logic.
+#
+# Crick cluster partitions - confirm with `sinfo`:
+#   ncpu   general CPU (128 threads/2TB RAM per node, 7-day max, open access)
+#   nint   interactive only (cpu<=8, 12h max) - not used here, for manual testing
+#   nhmem  high-RAM (4TB/node, min 2TB request) - not needed for this pipeline
+#   ga100  4xA100-80GB/node, open access, 7-day max - default GPU partition
+#   gh100  4xH100-80GB/node - needs HPC approval first (its-helpdesk@crick.ac.uk)
+#   gl40   4xL40/node - needs HPC approval first
+#   vis    capped at 1 GPU/user, 16h max - visualisation only, not batch GPU work
+
+executor: slurm
+jobs: 20                      # max concurrent SLURM jobs
+default-resources:
+  slurm_account: ""           # fill in your lab/STP group account if required
+  mem_mb: 8000
+  runtime: 60                 # minutes
+  slurm_partition: "ncpu"
+
+# per-rule overrides (Snakemake 8 syntax); resources set inside each rule's
+# `resources:` block (mem_mb, time_min, partition, gpus) take precedence
+# over these defaults.
+set-resources:
+  jackhmmer_search:
+    slurm_partition: "ncpu"
+  esmfold_predict:
+    slurm_partition: "ga100"
+  colabfold_predict:
+    slurm_partition: "ga100"
+
+latency-wait: 60
+rerun-incomplete: true
+printshellcmds: true

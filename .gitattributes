@@ -1,0 +1,16 @@
+* text=auto
+
+# Cluster scripts must retain Unix line endings - a .sh with CRLF fails on
+# Nemo with a cryptic "bad interpreter" or silently misparses.
+*.sh text eol=lf
+*.py text eol=lf
+*.smk text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+
+# Binary formats, so git never tries to diff/merge them as text.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
+*.sto binary
