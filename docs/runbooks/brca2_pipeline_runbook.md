@@ -5,32 +5,60 @@ phylogenetics, and structural-amenability screen on the Crick Nemo cluster.
 See the top-level `README.md` for the overall project rationale and
 what-runs-where split; this doc is the step-by-step "how".
 
-## 0. What's actually on Nemo (fill this in before trusting any script)
+## 0. What's actually on Nemo
 
-This pipeline needs HMMER (jackhmmer/hmmsearch), MAFFT, IQ-TREE, and either
-ESMFold or a route to batch structure prediction. None of these are
-confirmed to exist as Nemo modules - run the probe first:
+Confirmed via `scripts/probe_cluster_environment.sh` on 21 Oct 2026 (lab:
+`zhangx`, login node `login006`):
 
-```bash
-bash scripts/probe_cluster_environment.sh 2>&1 | tee cluster_probe.log
-```
+| Tool    | Module found? | Name/version used by this pipeline | Notes |
+|---------|---------------|--------------------------------------|-------|
+| HMMER   | yes           | `HMMER/3.4-gompi-2023a`               | latest `(D)` default |
+| MAFFT   | yes           | `MAFFT/7.526-GCC-14.2.0-with-extensions` | latest `(D)` default |
+| IQ-TREE | **no**        | static binary instead                 | see below |
+| ESMFold | **no**        | not used - see below                  | ColabFold used directly instead |
+| ColabFold | yes         | `ColabFold/1.5.2-foss-2022a-CUDA-11.7.0` | GPU, needs `ga100` |
+| AlphaFold | yes         | several versions, incl. a ColabFold-bundled one | not used directly - API/ColabFold cover our needs |
+| Singularity/Apptainer | yes | `Singularity/3.11.3` / `Apptainer/1.4.2` | available if ever needed |
+| Python  | yes           | `Python/3.11.3-GCCcore-12.3.0`        | used by `setup_cluster_venv.sh` |
 
-| Tool    | Module found? | Name/version | Notes |
-|---------|---------------|---------------|-------|
-| HMMER   | ?             |               |       |
-| MAFFT   | ?             |               |       |
-| IQ-TREE | ?             |               |       |
-| ESMFold | ?             |               |       |
-| Singularity/Apptainer | ? |          |       |
+These are already set as the defaults in `config/config.yaml` and in each
+`slurm_jobs/*.sbatch` header - override with `*_MODULE` env vars at submit
+time only if you rerun the probe and something's changed (module systems do
+get upgraded).
 
-Update this table after running the probe, and set the corresponding
-`*_MODULE`/`*_SETUP` environment variables (see each `slurm_jobs/*.sbatch`
-header) before submitting anything for real. If a tool has no module,
-options in order of effort: a conda/mamba environment, a pip install into a
-venv under lab space (`scripts/setup_cluster_venv.sh`), or a
-Singularity/Apptainer container (ask #hpc-beginners if one already exists for
-AlphaFold-family tools - ESMFold specifically may not, since it's not
-AlphaFold).
+**Two things this changes from the original plan:**
+
+1. **No IQ-TREE module.** It ships precompiled static Linux binaries that
+   need no compilation - run this once:
+   ```bash
+   bash scripts/install_iqtree_static.sh
+   ```
+   This installs it to `tools/iqtree-2.4.0/bin/iqtree2` and
+   `slurm_jobs/03_iqtree.sbatch` points at it by default.
+
+2. **No ESMFold module**, but **ColabFold is already installed with GPU
+   support**. Rather than custom-installing `torch`+`fair-esm` (which also
+   needs internet access to pull multi-GB model weights, uncertain on compute
+   nodes), the default path skips the ESMFold triage step entirely and runs
+   ColabFold directly on everything AlphaFold DB doesn't already cover:
+   ```bash
+   sbatch slurm_jobs/04_colabfold_direct.sbatch
+   ```
+   This is the right call as long as the post-filtering homolog set stays in
+   the low hundreds (`config.yaml`'s `filtering.max_hits` and
+   `min_domain_coverage` control this). If it turns out much larger, the
+   original ESMFold-triage + top-N-ColabFold path
+   (`slurm_jobs/04_esmfold.sbatch` + `05_colabfold.sbatch`) is still there as
+   a fallback, but needs that custom environment built first - not done yet,
+   ask if you hit this case.
+
+**Also worth noting from the probe:**
+- Your actual home directory is `/camp/home/<username>` (142K, 5GB quota) -
+  not `/nemo/homefs/home/<username>` as originally assumed. Same quota
+  constraint either way; just use `/camp/home/<username>` when checking
+  usage (`du -sh ~`).
+- `/nemo/lab` was at 89% full (1.4TB free) when last checked - worth another
+  `df -h /nemo/lab` before downloading a large reference database.
 
 ## 1. Log in and place the project correctly
 
@@ -38,9 +66,10 @@ AlphaFold).
 ssh <username>@login.nemo.thecrick.org
 ```
 
-Your home directory (`/nemo/homefs/home/<username>`) is a 5GB landing area
-only - never put the repo, a venv, or any data there. Clone into your lab's
-space instead:
+Your home directory (`/camp/home/<username>` - confirmed via the probe
+script, a legacy path still in use post the camp->nemo rename) is a 5GB
+landing area only - never put the repo, a venv, or any data there. Clone into
+your lab's space instead:
 
 ```bash
 mkdir -p /nemo/lab/<lab_name>/home/users/<username>
@@ -140,33 +169,28 @@ snakemake --profile profiles/local --snakefile workflow/Snakefile \
     results/metrics/homolog_metrics.tsv data/external/afdb_hits.tsv
 ```
 
-## 8. Stage 5 - ESMFold for whatever AlphaFold DB didn't cover (cluster)
+## 8. Stage 5 - ColabFold for whatever AlphaFold DB didn't cover (cluster)
+
+Default path on Nemo (see section 0): ColabFold is a ready module, so it runs
+directly rather than through an ESMFold triage step.
 
 ```bash
 rsync -avz data/processed/needs_prediction.fasta <username>@login.nemo.thecrick.org:.../data/processed/
 
-# on Nemo, once ESMFOLD_SETUP is confirmed in step 0:
-sbatch --export=ALL,ESMFOLD_SETUP="$ESMFOLD_SETUP" slurm_jobs/04_esmfold.sbatch
-```
-
-## 9. Stage 6 - laptop: shortlist, then ColabFold for the top candidates
-
-```bash
-rsync -avz <username>@login.nemo.thecrick.org:.../results/structures/esmfold/ ./results/structures/esmfold/
-
-snakemake --profile profiles/local --snakefile workflow/Snakefile \
-    data/processed/colabfold_shortlist.fasta
-
-rsync -avz data/processed/colabfold_shortlist.fasta <username>@login.nemo.thecrick.org:.../data/processed/
-
 # on Nemo
-sbatch --export=ALL,COLABFOLD_SETUP="$COLABFOLD_SETUP" slurm_jobs/05_colabfold.sbatch
+sbatch slurm_jobs/04_colabfold_direct.sbatch
 ```
 
-## 10. Final merge and plots (laptop)
+If `needs_prediction.fasta` turns out to be a few hundred sequences or more,
+this gets expensive - check in before submitting, since the fallback
+(ESMFold triage + shortlist, `slurm_jobs/04_esmfold.sbatch` +
+`05_colabfold.sbatch`) needs a custom environment built first.
+
+## 9. Final merge and plots (laptop)
 
 ```bash
 rsync -avz <username>@login.nemo.thecrick.org:.../results/structures/colabfold/ ./results/structures/colabfold/
+mkdir -p results/structures/esmfold   # empty is fine - the compile script handles it
 
 snakemake --profile profiles/local --snakefile workflow/Snakefile \
     results/structures/structure_metrics.tsv

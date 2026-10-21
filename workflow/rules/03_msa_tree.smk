@@ -36,11 +36,12 @@ rule iqtree_build:
     log:
         "logs/iqtree.log"
     shell:
-        # Secondary path - see slurm_jobs/03_iqtree.sbatch for the primary one.
+        # No IQ-TREE module on Nemo - uses the static binary from
+        # scripts/install_iqtree_static.sh. Secondary path overall; see
+        # slurm_jobs/03_iqtree.sbatch for the primary one.
         """
-        ml purge
-        ml "${{IQTREE_MODULE:?Set IQTREE_MODULE - see docs/runbooks/brca2_pipeline_runbook.md}}"
-        iqtree -s {input} -m {config[iqtree][model_selection]} \
+        "${{IQTREE_BIN:?Run scripts/install_iqtree_static.sh and set IQTREE_BIN}}" \
+            -s {input} -m {config[iqtree][model_selection]} \
             -bb {config[iqtree][bootstrap]} -nt {threads} \
             -pre {params.prefix} > {log} 2>&1
         """

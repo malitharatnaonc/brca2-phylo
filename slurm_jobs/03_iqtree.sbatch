@@ -12,7 +12,9 @@ set -euo pipefail
 PROJECT_DIR="${SLURM_SUBMIT_DIR}"
 cd "${PROJECT_DIR}"
 
-IQTREE_MODULE="${IQTREE_MODULE:-}"
+# No IQ-TREE module on Nemo - use the static binary from
+# scripts/install_iqtree_static.sh instead.
+IQTREE_BIN="${IQTREE_BIN:-${PROJECT_DIR}/tools/iqtree-2.4.0/bin/iqtree2}"
 IN="${IN:-results/msa/homologs_aln.fasta}"
 PREFIX="${PREFIX:-results/tree/homologs}"
 BOOTSTRAP="${BOOTSTRAP:-1000}"
@@ -21,11 +23,10 @@ mkdir -p results/tree logs/iqtree
 
 echo "Job ID: ${SLURM_JOB_ID}  Host: $(hostname)  Started: $(date)"
 
-ml purge
-if [[ -n "${IQTREE_MODULE}" ]]; then
-  ml "${IQTREE_MODULE}"
-else
-  echo "IQTREE_MODULE not set - see scripts/probe_cluster_environment.sh" >&2
+if [[ ! -x "${IQTREE_BIN}" ]]; then
+  echo "IQ-TREE binary not found at ${IQTREE_BIN}" >&2
+  echo "Run scripts/install_iqtree_static.sh first." >&2
+  exit 1
 fi
 
 if [[ ! -f "${IN}" ]]; then
@@ -33,7 +34,7 @@ if [[ ! -f "${IN}" ]]; then
   exit 1
 fi
 
-iqtree -s "${IN}" -m MFP -bb "${BOOTSTRAP}" -nt "${SLURM_CPUS_PER_TASK}" -pre "${PREFIX}"
+"${IQTREE_BIN}" -s "${IN}" -m MFP -bb "${BOOTSTRAP}" -nt "${SLURM_CPUS_PER_TASK}" -pre "${PREFIX}"
 
 echo "Finished: $(date)"
 echo "Check efficiency with: seff ${SLURM_JOB_ID}"

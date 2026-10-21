@@ -18,7 +18,7 @@ set -euo pipefail
 PROJECT_DIR="${SLURM_SUBMIT_DIR}"
 cd "${PROJECT_DIR}"
 
-HMMER_MODULE="${HMMER_MODULE:-}"      # fill in after scripts/probe_cluster_environment.sh
+HMMER_MODULE="${HMMER_MODULE:-HMMER/3.4-gompi-2023a}"      # confirmed via probe_cluster_environment.sh - this is the (D)efault version
 QUERY="${QUERY:-data/raw/human_BRCA2.fasta}"
 DB="${DB:-data/external/uniref90.fasta}"
 OUTDIR="${OUTDIR:-results/hits}"

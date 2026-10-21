@@ -1,9 +1,26 @@
 # ---- paths -------------------------------------------------------------
+# lab space on Nemo is /nemo/lab/<lab_name>/home/users/<username>/... -
+# NOT the home directory, which the probe confirmed is actually
+# /camp/home/<username> (a legacy path still in use post the camp->nemo
+# rename) and is only 5GB.
 # On the cluster, point `database` at an institute-wide copy if one exists
-# (check with your HPC team before downloading your own multi-GB copy).
+# (check with #hpc-beginners before downloading your own multi-GB copy -
+# the lab filesystem was at 89% full / 1.4TB free when last checked).
 query_fasta: "data/raw/human_BRCA2.fasta"        # UniProt P51587
 database: "data/external/uniref90.fasta"          # or uniprot_sprot.fasta
 brc_repeat_hmm: "data/external/BRC_repeat.hmm"    # Pfam PF00634, fetch once
+
+# ---- modules confirmed via scripts/probe_cluster_environment.sh -----------
+# Update these if you rerun the probe and get different results (e.g. after
+# a module system upgrade). (D) in `ml av` output marks the default version,
+# which these point at.
+modules:
+  hmmer: "HMMER/3.4-gompi-2023a"
+  mafft: "MAFFT/7.526-GCC-14.2.0-with-extensions"
+  colabfold: "ColabFold/1.5.2-foss-2022a-CUDA-11.7.0"
+  # iqtree: no module exists - see scripts/install_iqtree_static.sh instead
+  # esmfold: no module exists - ColabFold (above) is the default structure-
+  #   prediction path on this cluster instead; see slurm_jobs/04_colabfold_direct.sbatch
 
 # ---- jackhmmer -----------------------------------------------------------
 jackhmmer:
@@ -29,10 +46,18 @@ iqtree:
   cpus: 16
 
 # ---- structure sources -----------------------------------------------------
+# Default path on Nemo: ColabFold directly on everything AlphaFold DB didn't
+# cover (slurm_jobs/04_colabfold_direct.sbatch), since ColabFold is a ready
+# module and ESMFold is not. Fine as long as `needs_prediction.fasta` stays
+# in the low hundreds of sequences - domain-coverage filtering above should
+# keep it there. If it turns out much larger, fall back to the ESMFold-triage
+# + shortlist path (slurm_jobs/04_esmfold.sbatch + 05_colabfold.sbatch), which
+# needs a custom torch+esm install first (see docs/runbooks - not yet built).
 structure:
   alphafold_db_api: "https://alphafold.ebi.ac.uk/api/prediction/"
   esmfold_batch_size: 8
-  colabfold_shortlist_size: 20   # only the top N candidates get full AF2
+  colabfold_shortlist_size: 20   # only used by the ESMFold-triage fallback path
+  direct_colabfold_size_warning: 300  # warn (not block) above this many sequences
 
 # ---- SLURM resource defaults (overridden per-job in slurm_jobs/*.sbatch) ---
 # Crick cluster partitions (confirm with `sinfo` in case this changes):

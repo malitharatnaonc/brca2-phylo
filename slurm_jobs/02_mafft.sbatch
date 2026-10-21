@@ -12,7 +12,7 @@ set -euo pipefail
 PROJECT_DIR="${SLURM_SUBMIT_DIR}"
 cd "${PROJECT_DIR}"
 
-MAFFT_MODULE="${MAFFT_MODULE:-}"
+MAFFT_MODULE="${MAFFT_MODULE:-MAFFT/7.526-GCC-14.2.0-with-extensions}"
 IN="${IN:-data/processed/homologs_filtered.fasta}"
 OUT="${OUT:-results/msa/homologs_aln.fasta}"
 
