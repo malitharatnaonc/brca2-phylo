@@ -41,8 +41,29 @@ def parse_domtbl(path: str) -> pd.DataFrame:
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # UniProt accession is usually embedded in target_name, e.g. sp|P51587|BRCA2_HUMAN
-    df["uniprot_id"] = df["target_name"].str.split("|").str[1].fillna(df["target_name"])
+    # ID extraction depends on which database this searched. Two formats in
+    # play on Nemo (see docs/runbooks/uniprot_databases_on_nemo.md):
+    #   - UniProtKB-style:  sp|P51587|BRCA2_HUMAN           -> accession = P51587
+    #   - UniRef90-style:   UniRef90_A0A5A9P0L4              -> accession = A0A5A9P0L4
+    # The UniRef cluster ID is normally the accession of the cluster's
+    # representative sequence, so stripping the prefix recovers a usable
+    # UniProtKB accession in the common case. Occasionally the representative
+    # is a UniParc entry (ID starts with "UPI") rather than a UniProtKB
+    # accession - the UniProtKB REST API calls in fetch_taxonomy.py and
+    # filter_hits.py will fail cleanly for those (caught, logged, dropped),
+    # not crash, but it does mean a handful of hits can be silently lost if
+    # their only representative is UniParc-only.
+    def extract_id(name: str) -> str:
+        for prefix in ("UniRef100_", "UniRef90_", "UniRef50_"):
+            if name.startswith(prefix):
+                return name[len(prefix):]
+        if "|" in name:
+            parts = name.split("|")
+            if len(parts) >= 2:
+                return parts[1]
+        return name
+
+    df["uniprot_id"] = df["target_name"].apply(extract_id)
 
     # query coverage for this single domain hit (fraction of the query HMM matched)
     df["query_coverage"] = (df["hmm_to"] - df["hmm_from"] + 1) / df["qlen"]

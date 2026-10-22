@@ -3,11 +3,20 @@
 # NOT the home directory, which the probe confirmed is actually
 # /camp/home/<username> (a legacy path still in use post the camp->nemo
 # rename) and is only 5GB.
-# On the cluster, point `database` at an institute-wide copy if one exists
-# (check with #hpc-beginners before downloading your own multi-GB copy -
-# the lab filesystem was at 89% full / 1.4TB free when last checked).
+#
+# `database` points at an existing institute copy - confirmed present via
+# docs/runbooks/uniprot_databases_on_nemo.md, nothing to download. Using the
+# plain FASTA UniRef90 from the AlphaFold3 reference tree (2022_05 release -
+# newer than the BLAST-formatted UniRef90 copy elsewhere on the share, which
+# dates to 2015). UniRef90's 90%-identity clustering mostly collapses
+# near-identical sequences from close relatives (e.g. human/chimp), which
+# doesn't cost us anything here - BRCA2 orthologs are divergent enough
+# outside close relatives that distinct species stay as distinct cluster
+# representatives regardless. Full UniProtKB (`uniprot_all_2021_04.fa`, same
+# directory) is the alternative if cluster collapsing ever looks like it's
+# hiding something.
 query_fasta: "data/raw/human_BRCA2.fasta"        # UniProt P51587
-database: "data/external/uniref90.fasta"          # or uniprot_sprot.fasta
+database: "/flask/reference/Alphafold3_dataset/datasets/uniref90_2022_05.fa"
 brc_repeat_hmm: "data/external/BRC_repeat.hmm"    # Pfam PF00634, fetch once
 
 # ---- modules confirmed via scripts/probe_cluster_environment.sh -----------

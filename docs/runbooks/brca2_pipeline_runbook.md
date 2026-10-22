@@ -105,18 +105,28 @@ Edit `config/config.yaml`:
 
 ## 4. Stage 1 - jackhmmer search (cluster)
 
+The database is an existing institute copy - nothing to download. See
+`docs/runbooks/uniprot_databases_on_nemo.md` for the full survey; the short
+version is `config.yaml`'s `database` field already points at
+`/flask/reference/Alphafold3_dataset/datasets/uniref90_2022_05.fa`, and
+`slurm_jobs/01_jackhmmer.sbatch` defaults to the same path.
+
 ```bash
 sbatch slurm_jobs/01_jackhmmer.sbatch
 squeue -u "$USER"
 ```
 
 This is the long pole - test first on `nint` with a 2-iteration run against
-a small DB slice to get a wall-clock estimate before committing to a 24h
-`ncpu` allocation:
+a small slice of the real database (it's 71.8GB; don't try to load the
+whole thing interactively - the login node also caps interactive commands
+at 60s, far too short for a real search):
 
 ```bash
 srun --partition=nint --cpus-per-task=4 --mem=16G --time=00:30:00 --pty /bin/bash
-# inside: ml <hmmer module>; jackhmmer -N 2 ...
+# inside:
+ml HMMER/3.4-gompi-2023a
+head -c 500M /flask/reference/Alphafold3_dataset/datasets/uniref90_2022_05.fa > /tmp/small_test.fa
+jackhmmer -N 2 --cpu 4 data/raw/human_BRCA2.fasta /tmp/small_test.fa
 ```
 
 Once it finishes:

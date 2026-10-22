@@ -20,7 +20,7 @@ cd "${PROJECT_DIR}"
 
 HMMER_MODULE="${HMMER_MODULE:-HMMER/3.4-gompi-2023a}"      # confirmed via probe_cluster_environment.sh - this is the (D)efault version
 QUERY="${QUERY:-data/raw/human_BRCA2.fasta}"
-DB="${DB:-data/external/uniref90.fasta}"
+DB="${DB:-/flask/reference/Alphafold3_dataset/datasets/uniref90_2022_05.fa}"
 OUTDIR="${OUTDIR:-results/hits}"
 JACKHMMER_ITER="${JACKHMMER_ITER:-5}"
 JACKHMMER_INCE="${JACKHMMER_INCE:-1e-3}"
@@ -47,8 +47,10 @@ if [[ ! -f "${QUERY}" ]]; then
 fi
 if [[ ! -f "${DB}" ]]; then
   echo "Database not found: ${DB}" >&2
-  echo "Check with your HPC team whether an institute-wide copy of" >&2
-  echo "UniRef90/UniProtKB already exists before downloading your own." >&2
+  echo "The default path is an existing institute copy on /flask/reference -" >&2
+  echo "see docs/runbooks/uniprot_databases_on_nemo.md. If it's genuinely" >&2
+  echo "missing (moved, permissions changed), check with #hpc-beginners" >&2
+  echo "before downloading a fresh copy yourself." >&2
   exit 1
 fi
 
