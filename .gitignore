@@ -37,7 +37,19 @@ results/msa/
 results/tree/
 results/metrics/
 results/structures/
-logs/
+
+# logs/<tool>/ subdirectories are tracked (via .gitkeep) even though their
+# contents aren't: Slurm's #SBATCH --output=logs/<tool>/%x-%j.out needs the
+# directory to already exist BEFORE the job starts - it's resolved by Slurm
+# itself prior to the script running, so a script's own `mkdir -p` can't
+# help. Without this, a job's real output can still complete fine while its
+# log silently fails to write, because that's a separate, unrelated
+# mkdir inside the script that runs too late to matter for Slurm's own
+# output-file handling.
+logs/*
+logs/*/*
+!logs/*/
+!logs/*/.gitkeep
 
 # Large reference databases if ever staged locally/on scratch
 *.fasta.gz

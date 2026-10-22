@@ -25,6 +25,7 @@ rule filter_and_dedup:
         filtered_table="data/processed/homologs_filtered.tsv"
     params:
         min_cov=config["filtering"]["min_domain_coverage"],
-        max_hits=config["filtering"]["max_hits"]
+        max_hits=config["filtering"]["max_hits"],
+        per_species_n=config["filtering"]["per_species_top_n"]
     script:
         "../../scripts/filter_hits.py"

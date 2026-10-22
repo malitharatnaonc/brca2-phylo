@@ -44,9 +44,26 @@ def fetch_sequence(accession: str) -> str | None:
         return None
 
 
-def filter_hits(df: pd.DataFrame, min_cov: float, max_hits: int) -> pd.DataFrame:
+def select_top_per_species(agg: pd.DataFrame, per_species_n: int) -> pd.DataFrame:
+    """Within each species (taxon_id), keep only the top `per_species_n` hits
+    by coverage (best_evalue as tiebreak). Without this, a global coverage
+    ranking can let a cluster of near-identical close relatives (e.g. many
+    primates all with near-complete, high-coverage BRCA2) crowd out weaker
+    -but-real hits from genuinely divergent, taxonomically interesting
+    species - exactly the ones this project cares most about. Hits with no
+    resolved taxon_id (missing taxonomy lookup) are grouped together as one
+    "unknown" bucket and capped the same way, as a safety net rather than an
+    ideal outcome - worth spot-checking that bucket if it ends up large."""
+    agg = agg.sort_values(["approx_coverage", "best_evalue"], ascending=[False, True])
+    return agg.groupby("taxon_id", dropna=False, group_keys=False).head(per_species_n)
+
+
+def filter_hits(df: pd.DataFrame, min_cov: float, max_hits: int,
+                 per_species_n: int | None = None) -> pd.DataFrame:
     agg = aggregate_coverage(df)
     filtered = agg[agg["approx_coverage"] >= min_cov].copy()
+    if per_species_n:
+        filtered = select_top_per_species(filtered, per_species_n)
     filtered = filtered.sort_values("approx_coverage", ascending=False)
     filtered = filtered.head(max_hits)
     return filtered
@@ -59,14 +76,16 @@ if __name__ == "__main__":
         out_table = snakemake.output["filtered_table"]
         min_cov = snakemake.params["min_cov"]
         max_hits = snakemake.params["max_hits"]
+        per_species_n = snakemake.params.get("per_species_n")
     else:
         in_path, out_fasta, out_table, min_cov, max_hits = (
             sys.argv[1], sys.argv[2], sys.argv[3],
             float(sys.argv[4]), int(sys.argv[5])
         )
+        per_species_n = int(sys.argv[6]) if len(sys.argv) > 6 else None
 
     df = pd.read_csv(in_path, sep="\t")
-    filtered = filter_hits(df, min_cov, max_hits)
+    filtered = filter_hits(df, min_cov, max_hits, per_species_n)
 
     with open(out_fasta, "w") as fh:
         for i, row in filtered.iterrows():

@@ -43,6 +43,15 @@ filtering:
   min_domain_coverage: 0.4   # fraction of query's annotated domains covered
   max_hits: 1000              # hard cap before MSA, sort by coverage not E-value
   dedup_by: "uniprot_id"
+  # Collapses genuine same-species redundancy (multiple isoforms/strains of
+  # the same organism) down to its best hit before the max_hits cap applies.
+  # This does NOT by itself guarantee taxonomic breadth across distinct
+  # species - if the number of distinct species passing min_domain_coverage
+  # ever approaches max_hits, the final cap still favours high-coverage
+  # (closely related) species over divergent ones. Check
+  # `df["taxon_id"].nunique()` on the coverage-filtered set after a real run;
+  # if that's comfortably under max_hits, this isn't a live issue.
+  per_species_top_n: 1
 
 # ---- MSA / tree ------------------------------------------------------------
 mafft:
