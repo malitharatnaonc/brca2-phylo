@@ -23,6 +23,16 @@ else
   curl -L -o "iqtree-${VERSION}.tar.gz" "${URL}"
   tar xzf "iqtree-${VERSION}.tar.gz"
   rm "iqtree-${VERSION}.tar.gz"
+  # The archive extracts to iqtree-<version>-Linux-intel/ (platform suffix
+  # varies by release), not iqtree-<version>/ - rename so the path below
+  # stays predictable regardless of what the upstream archive is called.
+  EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name "iqtree-${VERSION}*" ! -name "iqtree-${VERSION}")
+  if [[ -z "${EXTRACTED_DIR}" ]]; then
+    echo "Could not find the extracted iqtree-${VERSION}* directory - check" >&2
+    echo "the archive contents with: tar tzf iqtree-${VERSION}.tar.gz" >&2
+    exit 1
+  fi
+  mv "${EXTRACTED_DIR}" "${INSTALL_DIR}"
 fi
 
 "${INSTALL_DIR}/bin/iqtree2" --version
