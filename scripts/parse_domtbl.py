@@ -8,8 +8,19 @@ Usage (standalone):
 Also callable from Snakemake via the `script:` directive, which injects a
 `snakemake` object with .input/.output attributes.
 """
+import re
 import sys
 import pandas as pd
+
+# UniRef90/50/100 headers carry organism and taxon ID directly in the
+# description (e.g. "... Tax=Triplophysa tibetana TaxID=1572043 RepID=...").
+# Extracting this locally avoids ~8000 UniProt REST calls that were failing
+# for roughly half of all hits (rate limiting and/or UniParc-only entries,
+# never fully diagnosed) - and more importantly, avoids a real correctness
+# bug: select_top_per_species() in filter_hits.py groups by taxon_id, so
+# unresolved taxon_id was silently collapsing many genuinely distinct
+# species into one shared "unknown" bucket during per-species dedup.
+TAX_PATTERN = re.compile(r"Tax=(.+?)\s+TaxID=(\d+)")
 
 DOMTBL_COLS = [
     "target_name", "target_accession", "tlen",
@@ -64,6 +75,18 @@ def parse_domtbl(path: str) -> pd.DataFrame:
         return name
 
     df["uniprot_id"] = df["target_name"].apply(extract_id)
+
+    # Extract organism/taxon_id locally where the header provides it (see
+    # TAX_PATTERN comment above). Rows where this doesn't match (non-UniRef
+    # databases, or any malformed entry) are left NaN - fetch_taxonomy.py
+    # falls back to the UniProt API only for those, a much smaller set.
+    tax_matches = df["description"].str.extract(TAX_PATTERN)
+    df["organism_name"] = tax_matches[0]
+    df["taxon_id"] = pd.to_numeric(tax_matches[1], errors="coerce")
+
+    # tlen is the hit's own full sequence length, already in domtblout -
+    # no need for a separate API call to get this.
+    df["sequence_length"] = df["tlen"]
 
     # query coverage for this single domain hit (fraction of the query HMM matched)
     df["query_coverage"] = (df["hmm_to"] - df["hmm_from"] + 1) / df["qlen"]
