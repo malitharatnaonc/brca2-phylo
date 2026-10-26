@@ -18,8 +18,7 @@ rule fetch_taxonomy:
 
 rule filter_and_dedup:
     input:
-        tax_table="data/processed/hits_with_taxonomy.tsv",
-        brc_hmm=config["brc_repeat_hmm"]
+        tax_table="data/processed/hits_with_taxonomy.tsv"
     output:
         filtered="data/processed/homologs_filtered.fasta",
         filtered_table="data/processed/homologs_filtered.tsv"
