@@ -52,7 +52,12 @@ filtering:
   # near-miss distribution on core_domain_coverage specifically before
   # trusting it for the real analysis.
   min_domain_coverage: 0.15
-  max_hits: 1000              # hard cap before MSA, sort by coverage not E-value
+  # Real distinct-species count at this threshold, with taxonomy resolution
+  # now fixed: 1649 (was wrongly reported as ~1048 when 46% of taxon_id was
+  # unresolved and silently collapsed into one dedup bucket - see the
+  # fetch_taxonomy.py rewrite). Set well above that so this cap stays a
+  # safety ceiling, not the thing actually deciding what's included.
+  max_hits: 2000
   dedup_by: "uniprot_id"
   # Collapses genuine same-species redundancy (multiple isoforms/strains of
   # the same organism) down to its best hit before the max_hits cap applies.
@@ -66,7 +71,13 @@ filtering:
 
 # ---- MSA / tree ------------------------------------------------------------
 mafft:
-  mode: "auto"          # "auto" below ~200 seqs, "linsi" above triggers warning
+  # "auto" lets MAFFT pick the right algorithm for the input size itself -
+  # L-INS-i for small inputs, faster progressive methods as N grows. Don't
+  # hardcode "linsi" here for large N - it's MAFFT's slowest, most accurate
+  # mode, practical only up to ~200 sequences; at this project's real scale
+  # (~1600+ taxa) it would likely never finish. (An earlier version of this
+  # comment had the size/mode relationship backwards.)
+  mode: "auto"
   cpus: 16
 
 iqtree:

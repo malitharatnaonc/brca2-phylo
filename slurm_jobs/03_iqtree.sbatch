@@ -3,7 +3,14 @@
 #SBATCH --partition=ncpu
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=32G
-#SBATCH --time=08:00:00
+#SBATCH --time=48:00:00
+# Bumped from the original 8h estimate - ModelFinder + 1000 ultrafast
+# bootstraps on ~1600+ taxa (vs. the few hundred this was originally sized
+# for) is a substantially bigger job. This is still a guess, not a tested
+# number: ncpu allows up to 7 days, so there's room to go higher if this
+# undershoots. Consider testing with a reduced bootstrap count first
+# (BOOTSTRAP=100 sbatch ... or similar) to sanity-check convergence/runtime
+# before committing to the full 1000-replicate run.
 #SBATCH --output=logs/iqtree/%x-%j.out
 #SBATCH --error=logs/iqtree/%x-%j.err
 
