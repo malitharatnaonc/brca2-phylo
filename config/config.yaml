@@ -40,7 +40,18 @@ jackhmmer:
 
 # ---- hit filtering (laptop-side) -----------------------------------------
 filtering:
-  min_domain_coverage: 0.4   # fraction of query's annotated domains covered
+  # Fraction of BRCA2's ~989 core-domain residues (8 BRC repeats + DBD - see
+  # CORE_DOMAINS in scripts/filter_hits.py) that a hit must cover, NOT
+  # fraction of the full 3418-residue length. The old whole-length metric
+  # systematically penalised genuinely divergent orthologs, since disordered
+  # linker regions don't align even in real orthologs - confirmed on real
+  # data: ~1055 of 2844 distinct-species hits sat between 0.1-0.4 on the old
+  # metric and included a striking diversity of plants, fungi, an oomycete,
+  # and a parasitic protist - exactly what this project is looking for.
+  # 0.15 is a starting point, not a validated final value - inspect the
+  # near-miss distribution on core_domain_coverage specifically before
+  # trusting it for the real analysis.
+  min_domain_coverage: 0.15
   max_hits: 1000              # hard cap before MSA, sort by coverage not E-value
   dedup_by: "uniprot_id"
   # Collapses genuine same-species redundancy (multiple isoforms/strains of
