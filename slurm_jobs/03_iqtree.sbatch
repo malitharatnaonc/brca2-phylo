@@ -24,6 +24,13 @@ cd "${PROJECT_DIR}"
 IQTREE_BIN="${IQTREE_BIN:-${PROJECT_DIR}/tools/iqtree-2.4.0/bin/iqtree2}"
 IN="${IN:-results/msa/homologs_aln.fasta}"
 PREFIX="${PREFIX:-results/tree/homologs}"
+# BOOTSTRAP=0 skips -bb entirely - useful for timing just ModelFinder + the
+# ML tree search (the fixed cost, incurred regardless of bootstrap count)
+# before committing to the real run. IQ-TREE's ultrafast bootstrap (-bb)
+# refuses to run below 1000 replicates at all (hard requirement, not a
+# suggestion - confirmed the hard way: "#replicates must be >= 1000"), so
+# there's no small-N -bb test available; skipping it entirely is the only
+# way to get a partial timing read without doing the full 1000.
 BOOTSTRAP="${BOOTSTRAP:-1000}"
 
 mkdir -p results/tree logs/iqtree
@@ -41,7 +48,19 @@ if [[ ! -f "${IN}" ]]; then
   exit 1
 fi
 
-"${IQTREE_BIN}" -s "${IN}" -m MFP -bb "${BOOTSTRAP}" -nt "${SLURM_CPUS_PER_TASK}" -pre "${PREFIX}"
+if [[ "${BOOTSTRAP}" -ne 0 && "${BOOTSTRAP}" -lt 1000 ]]; then
+  echo "BOOTSTRAP=${BOOTSTRAP} is invalid - IQ-TREE's -bb requires >= 1000" >&2
+  echo "replicates, or use BOOTSTRAP=0 to skip bootstrapping entirely for a" >&2
+  echo "timing-only test of ModelFinder + the ML tree search." >&2
+  exit 1
+fi
+
+if [[ "${BOOTSTRAP}" -eq 0 ]]; then
+  echo "BOOTSTRAP=0 - running without bootstrap (timing test only)"
+  "${IQTREE_BIN}" -s "${IN}" -m MFP -nt "${SLURM_CPUS_PER_TASK}" -pre "${PREFIX}"
+else
+  "${IQTREE_BIN}" -s "${IN}" -m MFP -bb "${BOOTSTRAP}" -nt "${SLURM_CPUS_PER_TASK}" -pre "${PREFIX}"
+fi
 
 echo "Finished: $(date)"
 echo "Check efficiency with: seff ${SLURM_JOB_ID}"
