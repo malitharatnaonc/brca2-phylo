@@ -7,12 +7,17 @@
 # 31412 MB RAM", leaving only ~600MB headroom at the old setting. ncpu's
 # per-cpu cap (28000mb x 16 cpus here = 448000mb max) means there's no real
 # cost to this much margin.
-#SBATCH --time=48:00:00
-# A BOOTSTRAP=0 test (ModelFinder + ML search only, no bootstrapping) got
-# through just 7 of 1232 candidate models in 2 hours - full -m MFP is not
-# feasible at this scale at all (extrapolates to ~15 days just for model
-# selection, past even the 7-day partition max). Use MSET to restrict the
-# search instead of testing everything - see MSET below.
+#SBATCH --time=7-00:00:00
+# With MSET=LG,WAG,JTT (44 models instead of 1232), timing data shows ~10.6
+# min/model (7 models in 74 minutes) - model selection alone should take
+# ~8 hours, before the ML tree search or any of the 1000 bootstrap
+# replicates. Genuinely uncertain how long the rest takes, so this requests
+# ncpu's full 7-day maximum rather than guessing a tighter number and
+# risking a timeout that throws away most of a week's progress. If it DOES
+# need to be resubmitted, IQ-TREE checkpoints its own progress periodically
+# (by default, into a .ckp.gz file alongside the other -pre outputs) -
+# resubmitting the exact same command (same PREFIX) should resume from
+# there rather than restarting from scratch.
 #SBATCH --output=logs/iqtree/%x-%j.out
 #SBATCH --error=logs/iqtree/%x-%j.err
 
