@@ -54,6 +54,23 @@ if [[ -n "${MSET}" ]]; then
   MSET_FLAG=(-mset "${MSET}")
 fi
 
+# MRATE restricts rate-heterogeneity models tested (e.g. MRATE=G,R drops +I
+# and +I+R combinations). CMAX caps FreeRate category count (default: 10).
+# Both added after real timing data showed diminishing/redundant returns at
+# high R-category counts and near-total overlap between +R and +I+R fits -
+# an evidence-based cut, not a guess.
+MRATE="${MRATE:-}"
+MRATE_FLAG=()
+if [[ -n "${MRATE}" ]]; then
+  MRATE_FLAG=(-mrate "${MRATE}")
+fi
+
+CMAX="${CMAX:-}"
+CMAX_FLAG=()
+if [[ -n "${CMAX}" ]]; then
+  CMAX_FLAG=(-cmax "${CMAX}")
+fi
+
 mkdir -p results/tree logs/iqtree
 
 echo "Job ID: ${SLURM_JOB_ID}  Host: $(hostname)  Started: $(date)"
@@ -82,9 +99,9 @@ fi
 
 if [[ "${BOOTSTRAP}" -eq 0 ]]; then
   echo "BOOTSTRAP=0 - running without bootstrap (timing test only)"
-  "${IQTREE_BIN}" -s "${IN}" -m MFP "${MSET_FLAG[@]}" -nt "${SLURM_CPUS_PER_TASK}" -pre "${PREFIX}"
+  "${IQTREE_BIN}" -s "${IN}" -m MFP "${MSET_FLAG[@]}" "${MRATE_FLAG[@]}" "${CMAX_FLAG[@]}" -nt "${SLURM_CPUS_PER_TASK}" -pre "${PREFIX}"
 else
-  "${IQTREE_BIN}" -s "${IN}" -m MFP "${MSET_FLAG[@]}" -bb "${BOOTSTRAP}" -nt "${SLURM_CPUS_PER_TASK}" -pre "${PREFIX}"
+  "${IQTREE_BIN}" -s "${IN}" -m MFP "${MSET_FLAG[@]}" "${MRATE_FLAG[@]}" "${CMAX_FLAG[@]}" -bb "${BOOTSTRAP}" -nt "${SLURM_CPUS_PER_TASK}" -pre "${PREFIX}"
 fi
 
 echo "Finished: $(date)"
