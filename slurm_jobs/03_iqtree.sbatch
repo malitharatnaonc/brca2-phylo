@@ -71,6 +71,23 @@ if [[ -n "${CMAX}" ]]; then
   CMAX_FLAG=(-cmax "${CMAX}")
 fi
 
+# REDO=1 forces IQ-TREE to discard an existing checkpoint and start
+# completely fresh. Needed whenever PREFIX is reused for genuinely
+# different input data (not just different options) - IQ-TREE's checkpoint
+# is keyed by output prefix, not input content, so it has no way to know
+# the alignment underneath has changed. Hit this the hard way: re-running
+# after rebuilding the full 1649-sequence dataset (up from an incomplete
+# 1001) failed in 2 seconds because a checkpoint from the old run was still
+# sitting there, and IQ-TREE reasonably assumed "already finished" rather
+# than re-reading the input. --redo-tree/--undo are NOT substitutes here -
+# both assume the same underlying alignment with only options changed,
+# which was not the case.
+REDO="${REDO:-}"
+REDO_FLAG=()
+if [[ "${REDO}" == "1" ]]; then
+  REDO_FLAG=(-redo)
+fi
+
 mkdir -p results/tree logs/iqtree
 
 echo "Job ID: ${SLURM_JOB_ID}  Host: $(hostname)  Started: $(date)"
@@ -93,15 +110,22 @@ if [[ "${BOOTSTRAP}" -ne 0 && "${BOOTSTRAP}" -lt 1000 ]]; then
   exit 1
 fi
 
+if [[ -f "${PREFIX}.ckp.gz" && "${REDO}" != "1" ]]; then
+  echo "NOTE: a checkpoint already exists at ${PREFIX}.ckp.gz" >&2
+  echo "If the input alignment has changed since that checkpoint was written," >&2
+  echo "IQ-TREE will refuse to proceed and this job will fail fast - set" >&2
+  echo "REDO=1 to force a completely fresh run instead." >&2
+fi
+
 if [[ -n "${MSET}" ]]; then
   echo "Restricting ModelFinder to: ${MSET}"
 fi
 
 if [[ "${BOOTSTRAP}" -eq 0 ]]; then
   echo "BOOTSTRAP=0 - running without bootstrap (timing test only)"
-  "${IQTREE_BIN}" -s "${IN}" -m MFP "${MSET_FLAG[@]}" "${MRATE_FLAG[@]}" "${CMAX_FLAG[@]}" -nt "${SLURM_CPUS_PER_TASK}" -pre "${PREFIX}"
+  "${IQTREE_BIN}" -s "${IN}" -m MFP "${MSET_FLAG[@]}" "${MRATE_FLAG[@]}" "${CMAX_FLAG[@]}" "${REDO_FLAG[@]}" -nt "${SLURM_CPUS_PER_TASK}" -pre "${PREFIX}"
 else
-  "${IQTREE_BIN}" -s "${IN}" -m MFP "${MSET_FLAG[@]}" "${MRATE_FLAG[@]}" "${CMAX_FLAG[@]}" -bb "${BOOTSTRAP}" -nt "${SLURM_CPUS_PER_TASK}" -pre "${PREFIX}"
+  "${IQTREE_BIN}" -s "${IN}" -m MFP "${MSET_FLAG[@]}" "${MRATE_FLAG[@]}" "${CMAX_FLAG[@]}" "${REDO_FLAG[@]}" -bb "${BOOTSTRAP}" -nt "${SLURM_CPUS_PER_TASK}" -pre "${PREFIX}"
 fi
 
 echo "Finished: $(date)"
