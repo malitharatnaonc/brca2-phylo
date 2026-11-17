@@ -1,0 +1,72 @@
+Assuming unrestricted shared filesystem usage.
+
+SNAKEMAKE
+=========
+  Date: 2026-10-26 13:13:31
+  Workflow ID: e7f4b921-c9f0-45a1-b693-2e55314e8d91
+  Platform: macOS-26.6.2-arm64-arm-64bit
+  Host: CV07HYQHFK
+  User: ratnawm
+  Snakemake version: 9.27.1
+  Python version: 3.11.17 (main, Oct 13 2026, 16:38:53) [Clang 21.1.8 ]
+  Command: /Users/ratnawm/miniforge3/envs/brca2-phylo-laptop/bin/snakemake --profile profiles/local --snakefile workflow/Snakefile data/processed/homologs_filtered.fasta --forcerun parse_domtbl
+  Snakefile: /Users/ratnawm/projects/brca2-phylo/workflow/Snakefile
+  Base directory: /Users/ratnawm/projects/brca2-phylo/workflow
+  Run directory: /Users/ratnawm/projects/brca2-phylo
+  Working directory: /Users/ratnawm/projects/brca2-phylo
+  Config file(s): ['config/config.yaml']
+  Config MD5: 42e8d28de2eb3984fdffacad4a090ba0
+
+Building DAG of jobs...
+Using shell: /bin/bash
+Provided cores: 4
+Rules claiming more threads will be scaled down.
+Job stats:
+job                 count
+----------------  -------
+parse_domtbl            1
+fetch_taxonomy          1
+filter_and_dedup        1
+total                   3
+
+Select jobs to execute...
+Execute 1 jobs...
+[Mon Oct 26 13:13:32 2026]
+localrule parse_domtbl:
+    input: results/hits/brca2.domtbl
+    output: data/processed/hits_raw.tsv
+    jobid: 0
+    reason: Forced execution
+    resources: tmpdir=/var/folders/pc/mfybnkvs2_nc29h40dstwl0w0000gp/T
+Shell command: None
+[Mon Oct 26 13:13:32 2026]
+Finished jobid: 0 (Rule: parse_domtbl)
+1 of 3 steps (33%) done
+Select jobs to execute...
+Execute 1 jobs...
+[Mon Oct 26 13:13:32 2026]
+localrule fetch_taxonomy:
+    input: data/processed/hits_raw.tsv
+    output: data/processed/hits_with_taxonomy.tsv
+    jobid: 2
+    reason: Input files updated by another job: data/processed/hits_raw.tsv
+    resources: tmpdir=/var/folders/pc/mfybnkvs2_nc29h40dstwl0w0000gp/T
+Shell command: None
+[Mon Oct 26 13:23:16 2026]
+Finished jobid: 2 (Rule: fetch_taxonomy)
+2 of 3 steps (67%) done
+Select jobs to execute...
+Execute 1 jobs...
+[Mon Oct 26 13:23:16 2026]
+localrule filter_and_dedup:
+    input: data/processed/hits_with_taxonomy.tsv
+    output: data/processed/homologs_filtered.fasta, data/processed/homologs_filtered.tsv
+    jobid: 1
+    reason: Input files updated by another job: data/processed/hits_with_taxonomy.tsv
+    resources: tmpdir=/var/folders/pc/mfybnkvs2_nc29h40dstwl0w0000gp/T
+Shell command: None
+[Mon Oct 26 13:28:17 2026]
+Finished jobid: 1 (Rule: filter_and_dedup)
+3 of 3 steps (100%) done
+Complete log(s): /Users/ratnawm/projects/brca2-phylo/.snakemake/log/2026-10-26T131331.277331.snakemake.log
+Elapsed time: 0:14:46.045711

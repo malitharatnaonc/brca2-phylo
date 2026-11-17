@@ -1,0 +1,44 @@
+Assuming unrestricted shared filesystem usage.
+
+SNAKEMAKE
+=========
+  Date: 2026-10-27 17:43:09
+  Workflow ID: 4022c551-1a65-4418-a129-ab13f0133513
+  Platform: macOS-26.6.2-arm64-arm-64bit
+  Host: CV07HYQHFK
+  User: ratnawm
+  Snakemake version: 9.27.1
+  Python version: 3.11.17 (main, Oct 13 2026, 16:38:53) [Clang 21.1.8 ]
+  Command: /Users/ratnawm/miniforge3/envs/brca2-phylo-laptop/bin/snakemake --profile profiles/local --snakefile workflow/Snakefile data/processed/homologs_filtered.fasta --forcerun filter_and_dedup
+  Snakefile: /Users/ratnawm/projects/brca2-phylo/workflow/Snakefile
+  Base directory: /Users/ratnawm/projects/brca2-phylo/workflow
+  Run directory: /Users/ratnawm/projects/brca2-phylo
+  Working directory: /Users/ratnawm/projects/brca2-phylo
+  Config file(s): ['config/config.yaml']
+  Config MD5: 6ff8427b9306ac43ae0e253976df5f62
+
+Building DAG of jobs...
+Using shell: /bin/bash
+Provided cores: 4
+Rules claiming more threads will be scaled down.
+Job stats:
+job                 count
+----------------  -------
+filter_and_dedup        1
+total                   1
+
+Select jobs to execute...
+Execute 1 jobs...
+[Tue Oct 27 17:43:10 2026]
+localrule filter_and_dedup:
+    input: data/processed/hits_with_taxonomy.tsv
+    output: data/processed/homologs_filtered.fasta, data/processed/homologs_filtered.tsv
+    jobid: 0
+    reason: Forced execution
+    resources: tmpdir=/var/folders/pc/mfybnkvs2_nc29h40dstwl0w0000gp/T
+Shell command: None
+[Tue Oct 27 17:51:39 2026]
+Finished jobid: 0 (Rule: filter_and_dedup)
+1 of 1 steps (100%) done
+Complete log(s): /Users/ratnawm/projects/brca2-phylo/.snakemake/log/2026-10-27T174309.584452.snakemake.log
+Elapsed time: 0:08:30.381743

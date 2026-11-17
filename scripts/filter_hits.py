@@ -5,6 +5,7 @@ the hit count, and fetch full sequences for whatever survives.
 
 Run locally (laptop).
 """
+import os
 import sys
 import time
 import requests
@@ -94,14 +95,50 @@ def aggregate_coverage(df: pd.DataFrame) -> pd.DataFrame:
     return grouped
 
 
-def fetch_sequence(accession: str) -> str | None:
-    try:
-        resp = requests.get(UNIPROT_FASTA_API.format(accession), timeout=15)
-        resp.raise_for_status()
-        lines = resp.text.strip().splitlines()
-        return "".join(lines[1:])  # drop header
-    except Exception:
-        return None
+def fetch_sequence(accession: str, retries: int = 3, backoff: float = 2.0) -> str | None:
+    """Retries transient failures before giving up - the original version
+    gave up after a single attempt, which combined with the silent-skip in
+    the caller, lost ~40% of accessions to what was very likely rate
+    limiting or transient network errors, not permanently-missing data."""
+    for attempt in range(retries):
+        try:
+            resp = requests.get(UNIPROT_FASTA_API.format(accession), timeout=15)
+            resp.raise_for_status()
+            lines = resp.text.strip().splitlines()
+            if not lines:
+                return None
+            return "".join(lines[1:])  # drop header
+        except Exception:
+            if attempt < retries - 1:
+                time.sleep(backoff * (attempt + 1))
+    return None
+
+
+def load_existing_sequences(fasta_path: str) -> dict[str, tuple[str, str]]:
+    """Read any sequences a previous (partial/failed) run already fetched
+    successfully, keyed by accession -> (organism_name, sequence). Lets a
+    re-run skip everything that already succeeded and only retry what's
+    actually missing, rather than re-fetching ~1000 sequences to recover 648
+    failures."""
+    existing: dict[str, tuple[str, str]] = {}
+    if not os.path.exists(fasta_path):
+        return existing
+    acc, organism, seq_lines = None, "", []
+    with open(fasta_path) as fh:
+        for line in fh:
+            line = line.rstrip("\n")
+            if line.startswith(">"):
+                if acc:
+                    existing[acc] = (organism, "".join(seq_lines))
+                header = line[1:].split(" ", 1)
+                acc = header[0]
+                organism = header[1] if len(header) > 1 else ""
+                seq_lines = []
+            else:
+                seq_lines.append(line)
+        if acc:
+            existing[acc] = (organism, "".join(seq_lines))
+    return existing
 
 
 def select_top_per_species(agg: pd.DataFrame, per_species_n: int) -> pd.DataFrame:
@@ -147,14 +184,48 @@ if __name__ == "__main__":
     df = pd.read_csv(in_path, sep="\t")
     filtered = filter_hits(df, min_cov, max_hits, per_species_n)
 
+    existing = load_existing_sequences(out_fasta)
+    if existing:
+        print(f"Found {len(existing)} already-fetched sequences from a previous "
+              f"run at {out_fasta} - skipping those, only fetching what's missing.")
+
+    failed = []
+    newly_fetched: dict[str, tuple[str, str]] = {}
+    to_fetch = [row for _, row in filtered.iterrows() if row["uniprot_id"] not in existing]
+    for i, row in enumerate(to_fetch):
+        acc = row["uniprot_id"]
+        seq = fetch_sequence(acc)
+        if seq:
+            newly_fetched[acc] = (row["organism_name"], seq)
+        else:
+            failed.append(acc)
+        if i % 50 == 0:
+            print(f"  fetched sequence {i}/{len(to_fetch)}")
+        time.sleep(0.1)
+
     with open(out_fasta, "w") as fh:
-        for i, row in filtered.iterrows():
-            seq = fetch_sequence(row["uniprot_id"])
-            if seq:
-                fh.write(f">{row['uniprot_id']} {row['organism_name']}\n{seq}\n")
-            if i % 50 == 0:
-                print(f"  fetched sequence {i}/{len(filtered)}")
-            time.sleep(0.1)
+        n_written = 0
+        for _, row in filtered.iterrows():
+            acc = row["uniprot_id"]
+            if acc in existing:
+                organism, seq = existing[acc]
+            elif acc in newly_fetched:
+                organism, seq = newly_fetched[acc]
+            else:
+                continue
+            fh.write(f">{acc} {organism}\n{seq}\n")
+            n_written += 1
+
+    if failed:
+        failed_path = out_fasta.rsplit(".", 1)[0] + "_failed_accessions.txt"
+        with open(failed_path, "w") as f:
+            f.write("\n".join(failed))
+        print(f"WARNING: {len(failed)} accessions failed to fetch after retries - "
+              f"listed in {failed_path}")
+        print(f"  Re-run this exact command to retry just these - already-"
+              f"successful fetches are skipped automatically, not redone.")
+    else:
+        print("All sequences fetched successfully - no failures.")
 
     filtered.to_csv(out_table, sep="\t", index=False)
-    print(f"Kept {len(filtered)} homologs (coverage >= {min_cov}) -> {out_fasta}")
+    print(f"Final: {n_written}/{len(filtered)} sequences written -> {out_fasta}")

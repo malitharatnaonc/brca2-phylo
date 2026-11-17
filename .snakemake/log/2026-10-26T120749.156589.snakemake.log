@@ -1,0 +1,25 @@
+Assuming unrestricted shared filesystem usage.
+
+SNAKEMAKE
+=========
+  Date: 2026-10-26 12:07:49
+  Workflow ID: 6130f7c9-a4e5-41e8-9290-dd99e02806ca
+  Platform: macOS-26.6.2-arm64-arm-64bit
+  Host: CV07HYQHFK
+  User: ratnawm
+  Snakemake version: 9.27.1
+  Python version: 3.11.17 (main, Oct 13 2026, 16:38:53) [Clang 21.1.8 ]
+  Command: /Users/ratnawm/miniforge3/envs/brca2-phylo-laptop/bin/snakemake --profile profiles/local --snakefile workflow/Snakefile data/processed/homologs_filtered.fasta
+  Snakefile: /Users/ratnawm/projects/brca2-phylo/workflow/Snakefile
+  Base directory: /Users/ratnawm/projects/brca2-phylo/workflow
+  Run directory: /Users/ratnawm/projects/brca2-phylo
+  Working directory: /Users/ratnawm/projects/brca2-phylo
+  Config file(s): ['config/config.yaml']
+  Config MD5: 9d80d9f169e6493ec7f9410d13673e4c
+
+Building DAG of jobs...
+MissingInputException in rule filter_and_dedup in file "/Users/ratnawm/projects/brca2-phylo/workflow/rules/02_parse_hits.smk", line 19:
+Missing input files for rule filter_and_dedup:
+    output: data/processed/homologs_filtered.fasta, data/processed/homologs_filtered.tsv
+    affected files:
+        data/external/BRC_repeat.hmm
