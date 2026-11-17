@@ -21,6 +21,7 @@ UNIPROT_FASTA_API = "https://rest.uniprot.org/uniprotkb/{}.fasta"
 # failures in this project were UPI IDs, which is why retries alone didn't
 # help them.
 UNIPARC_FASTA_API = "https://rest.uniprot.org/uniparc/{}.fasta"
+UNIPROTKB_JSON_API = "https://rest.uniprot.org/uniprotkb/{}.json"
 
 # Core conserved domains of human BRCA2 (P51587, 3418 aa), from UniProt/
 # InterPro feature annotations: 8 BRC repeats (RAD51-binding) + the
@@ -104,41 +105,78 @@ def aggregate_coverage(df: pd.DataFrame) -> pd.DataFrame:
     return grouped
 
 
+def _fetch_fasta_once(url: str, timeout: int = 15) -> tuple[str | None, str | None]:
+    """Single raw attempt against a fasta-format endpoint. Returns
+    (sequence, error_reason); error_reason is None only on real success."""
+    try:
+        resp = requests.get(url, timeout=timeout)
+        if resp.status_code == 404:
+            return None, "404 not found"
+        resp.raise_for_status()
+        lines = resp.text.strip().splitlines()
+        if not lines:
+            return None, "empty response"
+        return "".join(lines[1:]), None  # drop header
+    except requests.exceptions.HTTPError as e:
+        if e.response is not None and e.response.status_code == 429:
+            return None, "429 rate limited"
+        return None, f"HTTP {e.response.status_code if e.response is not None else '?'}"
+    except requests.exceptions.Timeout:
+        return None, "timeout"
+    except Exception as e:
+        return None, f"{type(e).__name__}: {e}"
+
+
+def _resolve_uniparc_id(accession: str) -> str | None:
+    """A UniProtKB accession can return HTTP 200 with an empty fasta body
+    when the entry has been deleted/demerged from UniProtKB's curated set
+    (e.g. 'Not part of a reference proteome') - confirmed on a real failing
+    accession, whose JSON entry showed entryType":"Inactive" plus
+    extraAttributes.uniParcId. The underlying sequence is NOT gone - UniParc
+    (UniProt's permanent sequence archive) never deletes anything, even
+    when UniProtKB prunes an entry from its reference set. This looks up
+    that UniParc ID so the sequence can still be fetched."""
+    try:
+        resp = requests.get(UNIPROTKB_JSON_API.format(accession), timeout=15)
+        resp.raise_for_status()
+        return resp.json().get("extraAttributes", {}).get("uniParcId")
+    except Exception:
+        return None
+
+
 def fetch_sequence(accession: str, retries: int = 3, backoff: float = 10.0) -> tuple[str | None, str | None]:
     """Retries transient failures before giving up, with backoff long enough
-    to plausibly clear a rate-limit window (10/20/30s, not the original
-    2/4/6s) - a first attempt at this used short backoff and saw a 100%
-    retry failure rate on a batch of 648, which a real manual curl afterward
-    showed was NOT because the resource was missing (clean HTTP 200) - all
-    the evidence points at the whole retry batch happening inside one
-    still-active rate-limited window, where no backoff measured in single-
-    digit seconds was ever going to help.
+    to plausibly clear a rate-limit window (10/20/30s, not an earlier
+    2/4/6s that saw a 100% retry failure rate on a batch where a manual
+    curl immediately after succeeded cleanly - consistent with the whole
+    batch happening inside one still-active rate-limited window).
+
+    Also falls back to UniParc when UniProtKB returns an empty body for an
+    inactive/deleted entry (see _resolve_uniparc_id) - this fallback itself
+    is retried through the same loop, so a transient failure while
+    resolving the UniParc ID doesn't permanently give up either.
 
     Returns (sequence, error_reason) - error_reason is None on success,
     otherwise a short string identifying what actually went wrong, so a
     failure log is self-diagnosing instead of requiring a manual curl to
-    find out why (which is exactly what the previous version lacked)."""
+    find out why."""
     url = UNIPARC_FASTA_API.format(accession) if accession.startswith("UPI") \
         else UNIPROT_FASTA_API.format(accession)
     last_error = None
     for attempt in range(retries):
-        try:
-            resp = requests.get(url, timeout=15)
-            if resp.status_code == 404:
-                return None, "404 not found"
-            resp.raise_for_status()
-            lines = resp.text.strip().splitlines()
-            if not lines:
-                return None, "empty response"
-            return "".join(lines[1:]), None  # drop header
-        except requests.exceptions.HTTPError as e:
-            last_error = f"HTTP {e.response.status_code if e.response is not None else '?'}"
-            if e.response is not None and e.response.status_code == 429:
-                last_error = "429 rate limited"
-        except requests.exceptions.Timeout:
-            last_error = "timeout"
-        except Exception as e:
-            last_error = f"{type(e).__name__}: {e}"
+        seq, error = _fetch_fasta_once(url)
+        if seq:
+            return seq, None
+        last_error = error
+
+        if error == "empty response" and not accession.startswith("UPI"):
+            uniparc_id = _resolve_uniparc_id(accession)
+            if uniparc_id:
+                seq2, error2 = _fetch_fasta_once(UNIPARC_FASTA_API.format(uniparc_id))
+                if seq2:
+                    return seq2, None
+                last_error = f"empty response, UniParc fallback also failed: {error2}"
+
         if attempt < retries - 1:
             time.sleep(backoff * (attempt + 1))
     return None, last_error
