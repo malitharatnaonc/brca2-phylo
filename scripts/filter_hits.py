@@ -12,6 +12,15 @@ import requests
 import pandas as pd
 
 UNIPROT_FASTA_API = "https://rest.uniprot.org/uniprotkb/{}.fasta"
+# UniParc entries (ID starts with "UPI", e.g. a UniRef cluster whose
+# representative isn't in UniProtKB) live in a separate database with their
+# own endpoint - confirmed against UniProt's own OpenAPI spec
+# (rest.uniprot.org/uniparc/api/docs lists "/uniparc/{upi}" supporting
+# "text/plain;format=fasta"), not guessed. The uniprotkb endpoint will
+# always 404 for these, no matter how many retries - 335 of the 648
+# failures in this project were UPI IDs, which is why retries alone didn't
+# help them.
+UNIPARC_FASTA_API = "https://rest.uniprot.org/uniparc/{}.fasta"
 
 # Core conserved domains of human BRCA2 (P51587, 3418 aa), from UniProt/
 # InterPro feature annotations: 8 BRC repeats (RAD51-binding) + the
@@ -95,23 +104,44 @@ def aggregate_coverage(df: pd.DataFrame) -> pd.DataFrame:
     return grouped
 
 
-def fetch_sequence(accession: str, retries: int = 3, backoff: float = 2.0) -> str | None:
-    """Retries transient failures before giving up - the original version
-    gave up after a single attempt, which combined with the silent-skip in
-    the caller, lost ~40% of accessions to what was very likely rate
-    limiting or transient network errors, not permanently-missing data."""
+def fetch_sequence(accession: str, retries: int = 3, backoff: float = 10.0) -> tuple[str | None, str | None]:
+    """Retries transient failures before giving up, with backoff long enough
+    to plausibly clear a rate-limit window (10/20/30s, not the original
+    2/4/6s) - a first attempt at this used short backoff and saw a 100%
+    retry failure rate on a batch of 648, which a real manual curl afterward
+    showed was NOT because the resource was missing (clean HTTP 200) - all
+    the evidence points at the whole retry batch happening inside one
+    still-active rate-limited window, where no backoff measured in single-
+    digit seconds was ever going to help.
+
+    Returns (sequence, error_reason) - error_reason is None on success,
+    otherwise a short string identifying what actually went wrong, so a
+    failure log is self-diagnosing instead of requiring a manual curl to
+    find out why (which is exactly what the previous version lacked)."""
+    url = UNIPARC_FASTA_API.format(accession) if accession.startswith("UPI") \
+        else UNIPROT_FASTA_API.format(accession)
+    last_error = None
     for attempt in range(retries):
         try:
-            resp = requests.get(UNIPROT_FASTA_API.format(accession), timeout=15)
+            resp = requests.get(url, timeout=15)
+            if resp.status_code == 404:
+                return None, "404 not found"
             resp.raise_for_status()
             lines = resp.text.strip().splitlines()
             if not lines:
-                return None
-            return "".join(lines[1:])  # drop header
-        except Exception:
-            if attempt < retries - 1:
-                time.sleep(backoff * (attempt + 1))
-    return None
+                return None, "empty response"
+            return "".join(lines[1:]), None  # drop header
+        except requests.exceptions.HTTPError as e:
+            last_error = f"HTTP {e.response.status_code if e.response is not None else '?'}"
+            if e.response is not None and e.response.status_code == 429:
+                last_error = "429 rate limited"
+        except requests.exceptions.Timeout:
+            last_error = "timeout"
+        except Exception as e:
+            last_error = f"{type(e).__name__}: {e}"
+        if attempt < retries - 1:
+            time.sleep(backoff * (attempt + 1))
+    return None, last_error
 
 
 def load_existing_sequences(fasta_path: str) -> dict[str, tuple[str, str]]:
@@ -189,19 +219,26 @@ if __name__ == "__main__":
         print(f"Found {len(existing)} already-fetched sequences from a previous "
               f"run at {out_fasta} - skipping those, only fetching what's missing.")
 
-    failed = []
+    failed: list[tuple[str, str]] = []  # (accession, reason)
     newly_fetched: dict[str, tuple[str, str]] = {}
     to_fetch = [row for _, row in filtered.iterrows() if row["uniprot_id"] not in existing]
     for i, row in enumerate(to_fetch):
         acc = row["uniprot_id"]
-        seq = fetch_sequence(acc)
+        seq, error = fetch_sequence(acc)
         if seq:
             newly_fetched[acc] = (row["organism_name"], seq)
         else:
-            failed.append(acc)
+            failed.append((acc, error or "unknown"))
         if i % 50 == 0:
             print(f"  fetched sequence {i}/{len(to_fetch)}")
-        time.sleep(0.1)
+        # 1s between requests, not the original 0.1s - a batch of 648 at 0.1s
+        # saw a 100% retry failure rate that a manual curl immediately after
+        # succeeded cleanly on, consistent with rate-limiting rather than
+        # missing data. This is a cautious, unverified-exact-limit choice,
+        # not a number UniProt publishes - if failures persist even at this
+        # pace, that's worth treating as new evidence, not assuming this
+        # guess was sufficient.
+        time.sleep(1.0)
 
     with open(out_fasta, "w") as fh:
         n_written = 0
@@ -219,9 +256,11 @@ if __name__ == "__main__":
     if failed:
         failed_path = out_fasta.rsplit(".", 1)[0] + "_failed_accessions.txt"
         with open(failed_path, "w") as f:
-            f.write("\n".join(failed))
+            f.write("\n".join(f"{acc}\t{reason}" for acc, reason in failed))
+        reason_counts = pd.Series([r for _, r in failed]).value_counts()
         print(f"WARNING: {len(failed)} accessions failed to fetch after retries - "
-              f"listed in {failed_path}")
+              f"listed in {failed_path} (accession + reason, tab-separated)")
+        print(f"  Reasons: {dict(reason_counts)}")
         print(f"  Re-run this exact command to retry just these - already-"
               f"successful fetches are skipped automatically, not redone.")
     else:
